@@ -352,7 +352,7 @@ public struct ProfileView: View {
     private var pistasTabContent: some View {
         VStack(alignment: .leading, spacing: 10) {
             ForEach(userTracks) { track in
-                CompactTrackCard(track: track)
+                TrackRow(track: track, allTracks: userTracks)
             }
         }
     }
@@ -391,7 +391,7 @@ public struct ProfileView: View {
                 genre: "Electronic"
             )
             
-            CompactTrackCard(track: favoriteTrack)
+            TrackRow(track: favoriteTrack)
         }
     }
     

@@ -87,13 +87,23 @@ La aplicación recrea fielmente la totalidad de apartados descubiertos en el an�
 
 ---
 
-### 6. Sistema de Audio Global (`AudioPlayerService.swift`)
+### 6. Sistema de Audio Global y Dynamic Island Nativa (`AudioPlayerService.swift`)
+* **Reproducción en Segundo Plano y Dynamic Island Nativa de iOS**:
+  - Soporte completo de reproducción en background con `UIBackgroundModes: ["audio"]` y categoría `.playback`.
+  - Integración nativa con la **Dynamic Island del sistema operativo iOS**: al salir de la aplicación o bloquear la pantalla, iOS presenta automáticamente la reproducción en la Dynamic Island sin necesidad de Live Activities ni extensiones adicionales:
+    - **Lateral Izquierdo (Leading)**: Carátula de la pista en alta resolución suministrada mediante `MPMediaItemPropertyArtwork`.
+    - **Lateral Derecho (Trailing)**: Animación fluida de barras de sonido / ecualizador nativo del sistema operativo iOS.
+    - **Pulsación Larga**: Despliegue del reproductor flotante nativo Now Playing de Apple con scrubber interactivo, volumen, selector de salida AirPlay y controles táctiles completos.
+  - Controles remotos en Pantalla de Bloqueo, Control Center, AirPods y Apple Watch vía `MPRemoteCommandCenter` (Play, Pause, Toggle, Next, Previous, Scrubbing y Like).
+  - Metadatos enriquecidos con carátula en alta definición vía `MPNowPlayingInfoCenter` (título, artista, duración, scrubber en tiempo real y placeholder temático en caso de ausencia de red).
+  - Manejo inteligente de interrupciones del sistema (`AVAudioSession.interruptionNotification`) para llamadas y Siri, y pausa automática ante desconexión de auriculares (`routeChangeNotification`).
+  - Motor de bucle silencioso en memoria para garantizar continuidad en segundo plano y presencia en la Dynamic Island incluso en pistas simuladas u offline.
 * **Mini-Reproductor Suspendido (`MiniPlayerView.swift`)**:
   - Anclado dinámicamente mediante `.safeAreaInset(edge: .bottom)` sobre el TabBar nativo.
-  - Reproduce pistas reales en streaming desde el CDN de UnderBro.
+  - Reproduce pistas reales en streaming desde el CDN de UnderBro o locales.
   - Al pulsarlo, abre el reproductor a pantalla completa.
 * **Reproductor a Pantalla Completa (`FullScreenPlayerView.swift`)**:
-  - Portada con resplandor cromático según la pista.
+  - Portada con proporción forzada 1:1, bordes continuos y resplandor cromático según la pista.
   - Barra de onda de audio interactiva (`WaveformView`) con scrubbing en tiempo real.
   - Selector de velocidad cíclico (`0.75x`, `1x`, `1.25x`, `1.5x`, `2x`).
 
@@ -129,7 +139,7 @@ El código base sigue los principios de Clean Architecture y modularidad en Swif
 ### 3. Motor y Servicios de Audio
 * **[`AudioPlayerService.swift`](file:///Users/troli/Desktop/app%20underbroski/app%20underbroski/AudioPlayerService.swift)**:
   * **Función**: Motor de reproducción de audio global singleton (`AudioPlayerService.shared`).
-  * **Responsabilidad**: Gestiona `AVPlayer`, buffer de streaming desde el CDN de UnderBro, cola de reproducción, estados reactivos `@Published` (`isPlaying`, `currentTrack`, `currentTime`, `duration`, `playbackRate`), búsqueda temporal (*scrubbing*), pistas siguiente/anterior, selector de velocidad (`0.75x`, `1.0x`, `1.25x`, `1.5x`, `2.0x`) y disparadores de respuesta háptica.
+  * **Responsabilidad**: Gestiona reproducción en segundo plano (`UIBackgroundModes: ["audio"]`), `AVPlayer` con streaming CDN, integración nativa de `MPRemoteCommandCenter` (pantalla de bloqueo y Control Center) y `MPNowPlayingInfoCenter` (carátulas, títulos y scrubbing nativo), activación de la Dynamic Island nativa de iOS al salir de la aplicación, manejo de interrupciones de sistema (`AVAudioSession`), cola de reproducción reactiva (`@Published`), selector de velocidad (`0.75x` a `2x`) y buffer silencioso para pistas simuladas/offline.
 
 ---
 
@@ -182,8 +192,8 @@ El código base sigue los principios de Clean Architecture y modularidad en Swif
   * **Función**: Tarjeta destacada de gran tamaño para el tema N.º 1 en tendencias (ej. `###sol`).
   * **Responsabilidad**: Presenta la portada de la canción con bisel de cristal reflectante, insignia superior destacada, reproductor integrado con forma de onda interactiva y botones de interacción social (likes, plays, comentarios, reposts).
 * **[`CompactTrackCard.swift`](file:///Users/troli/Desktop/app%20underbroski/app%20underbroski/CompactTrackCard.swift)**:
-  * **Función**: Tarjeta compacta para listados de canciones y catálogo de beats.
-  * **Responsabilidad**: Muestra posición en ranking, portada en miniatura, título, artista, etiqueta de género o BPM, duración, botones de like y reproducción directa.
+  * **Función**: Tarjeta compacta para listados de canciones y catálogo de beats, componente reusable [`TrackRow`](file:///Users/troli/Desktop/app%20underbroski/app%20underbroski/CompactTrackCard.swift) y vista de lista [`TrackListView`](file:///Users/troli/Desktop/app%20underbroski/app%20underbroski/CompactTrackCard.swift).
+  * **Responsabilidad**: Muestra posición en ranking, portada en miniatura, título, artista, etiqueta de género o BPM, duración, botones de like y reproducción directa. Incluye [`TrackRow`](file:///Users/troli/Desktop/app%20underbroski/app%20underbroski/CompactTrackCard.swift) para su uso en colecciones e implementa la vista de lista [`TrackListView`](file:///Users/troli/Desktop/app%20underbroski/app%20underbroski/CompactTrackCard.swift) con soporte nativo de **Pull-to-Refresh** (`.refreshable`).
 * **[`MiniPlayerView.swift`](file:///Users/troli/Desktop/app%20underbroski/app%20underbroski/MiniPlayerView.swift)**:
   * **Función**: Mini-reproductor flotante anclado en la parte inferior de la pantalla.
   * **Responsabilidad**: Muestra la pista actual en reproducción, portada, título, controles de play/pausa y anterior/siguiente, barra de progreso sutil y gesto de toque para abrir el reproductor completo.

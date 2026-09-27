@@ -5,7 +5,7 @@
 //  Pantalla principal "Stream": Incluye los apartados de la aplicación web:
 //    - Selector de feed: Tendencias, Nuevo, Siguiendo
 //    - Sub-secciones de descubrimiento: Todo, Radio en vivo, Beats (con BPM/Escala), Bro's (Artistas)
-//    - Barra de búsqueda interactiva
+//    - Barra de búsqueda global en tiempo real conectada a la base de datos (Usuarios + Canciones)
 //    - Carrusel de historias efímeras
 //    - Reproducción de pistas conectadas a Supabase con audio streaming real
 //
@@ -13,11 +13,27 @@
 import SwiftUI
 
 public struct UnderBroTrendingView: View {
+    public enum SearchScope: String, CaseIterable, Identifiable {
+        case todos = "Todo"
+        case creadores = "Bro's"
+        case canciones = "Canciones"
+        
+        public var id: String { rawValue }
+    }
+    
     @State private var selectedSegment: FeedSegment = .tendencias
     @State private var selectedDiscoverFilter: DiscoverFilter = .todos
+    
+    // Estado de Búsqueda Global en Base de Datos
     @State private var searchQuery: String = ""
     @State private var isSearching: Bool = false
+    @State private var searchResults: GlobalSearchResult = GlobalSearchResult()
+    @State private var isSearchingDatabase: Bool = false
+    @State private var selectedSearchScope: SearchScope = .todos
+    @State private var searchDebounceTask: Task<Void, Never>? = nil
+    @FocusState private var isSearchFieldFocused: Bool
     
+    // Estado de Contenido
     @State private var stories: [Story] = []
     @State private var tracks: [Track] = []
     @State private var artists: [UserProfile] = []
@@ -32,12 +48,21 @@ public struct UnderBroTrendingView: View {
     public var body: some View {
         NavigationStack {
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 18) {
                     // Cabecera superior con logotipo y acciones
                     FeedHeaderView(
                         onSearchTapped: {
                             withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                                 isSearching.toggle()
+                                if !isSearching {
+                                    searchQuery = ""
+                                    searchResults = GlobalSearchResult()
+                                    isSearchFieldFocused = false
+                                } else {
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                        isSearchFieldFocused = true
+                                    }
+                                }
                             }
                         },
                         onNotificationsTapped: {},
@@ -49,44 +74,51 @@ public struct UnderBroTrendingView: View {
                         searchBarView
                             .padding(.horizontal, 16)
                             .transition(.move(edge: .top).combined(with: .opacity))
-                    }
-                    
-                    // Segmentos principales (Tendencias / Nuevo / Siguiendo)
-                    SegmentedPillBar(selectedSegment: $selectedSegment)
-                        .onChange(of: selectedSegment) {
-                            loadFeedData()
+                        
+                        // Resultados de la búsqueda global en base de datos (Usuarios + Canciones)
+                        databaseSearchResultsView
+                    } else {
+                        // Segmentos principales (Tendencias / Nuevo / Siguiendo)
+                        SegmentedPillBar(selectedSegment: $selectedSegment)
+                            .onChange(of: selectedSegment) {
+                                loadFeedData()
+                            }
+                        
+                        // Píldoras de descubrimiento secundarias (Todo / Radio / Beats / Bro's)
+                        discoverPillsView
+                            .padding(.horizontal, 16)
+                        
+                        // Carrusel de historias efímeras
+                        if !stories.isEmpty && selectedDiscoverFilter == .todos {
+                            StoriesCarouselView(
+                                stories: stories,
+                                onSelectStory: { _ in },
+                                onAddStory: {}
+                            )
                         }
-                    
-                    // Píldoras de descubrimiento secundarias (Todo / Radio / Beats / Bro's)
-                    discoverPillsView
-                        .padding(.horizontal, 16)
-                    
-                    // Carrusel de historias efímeras
-                    if !stories.isEmpty && selectedDiscoverFilter == .todos {
-                        StoriesCarouselView(
-                            stories: stories,
-                            onSelectStory: { _ in },
-                            onAddStory: {}
-                        )
-                    }
-                    
-                    // Contenido según el filtro activo
-                    switch selectedDiscoverFilter {
-                    case .todos:
-                        standardFeedView
-                    case .radio:
-                        radioStreamSection
-                    case .beats:
-                        beatsSectionView
-                    case .eventos:
-                        eventsSectionView
-                    case .bros:
-                        brosSectionView
+                        
+                        // Contenido según el filtro activo
+                        switch selectedDiscoverFilter {
+                        case .todos:
+                            standardFeedView
+                        case .radio:
+                            radioStreamSection
+                        case .beats:
+                            beatsSectionView
+                        case .eventos:
+                            eventsSectionView
+                        case .bros:
+                            brosSectionView
+                        }
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
                 .padding(.top, 4)
                 .padding(.bottom, 120)
             }
+            .scrollDismissesKeyboard(.interactively)
+            .scrollBounceBehavior(.always, axes: .vertical)
             .background(UBTheme.backgroundDark.ignoresSafeArea())
             .refreshable {
                 await refreshData()
@@ -97,32 +129,310 @@ public struct UnderBroTrendingView: View {
         }
     }
     
-    // MARK: - Barra de Búsqueda
+    // MARK: - Barra de Búsqueda Global
     
     private var searchBarView: some View {
         HStack(spacing: 10) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(UBTheme.textSecondary)
+            if isSearchingDatabase {
+                ProgressView()
+                    .tint(UBTheme.accentCyan)
+                    .scaleEffect(0.8)
+                    .frame(width: 20, height: 20)
+            } else {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(UBTheme.textSecondary)
+            }
             
-            TextField("Buscar en UnderBro…", text: $searchQuery)
+            TextField("Buscar artistas, productores o canciones...", text: $searchQuery)
+                .focused($isSearchFieldFocused)
                 .foregroundStyle(.white)
                 .autocorrectionDisabled()
                 .onSubmit {
-                    performSearch()
+                    performDatabaseSearch(query: searchQuery, immediate: true)
+                }
+                .onChange(of: searchQuery) { _, newValue in
+                    performDatabaseSearch(query: newValue)
                 }
             
             if !searchQuery.isEmpty {
                 Button {
                     searchQuery = ""
-                    loadFeedData()
+                    searchResults = GlobalSearchResult()
+                    isSearchingDatabase = false
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundStyle(UBTheme.textTertiary)
                 }
             }
+            
+            Button("Cancelar") {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    isSearching = false
+                    searchQuery = ""
+                    searchResults = GlobalSearchResult()
+                    isSearchingDatabase = false
+                    isSearchFieldFocused = false
+                }
+            }
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(UBTheme.accentEnd)
         }
         .padding(12)
         .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+    
+    // MARK: - Resultados de Búsqueda Global en Base de Datos
+    
+    private var databaseSearchResultsView: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            // Selector de ámbito (Todo / Bro's / Canciones)
+            if !searchQuery.isEmpty {
+                searchScopeBar
+                    .padding(.horizontal, 16)
+            }
+            
+            if isSearchingDatabase {
+                VStack(spacing: 12) {
+                    ProgressView()
+                        .tint(UBTheme.accentCyan)
+                    Text("Buscando en la base de datos de UnderBro...")
+                        .font(.caption)
+                        .foregroundStyle(UBTheme.textSecondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 40)
+                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .padding(.horizontal, 16)
+            } else if searchQuery.trimmingCharacters(in: .whitespaces).isEmpty {
+                // Sugerencias de búsqueda al abrir
+                searchSuggestionsView
+                    .padding(.horizontal, 16)
+            } else if searchResults.isEmpty {
+                // Estado vacío de búsqueda
+                VStack(spacing: 12) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 38))
+                        .foregroundStyle(UBTheme.textTertiary)
+                    Text("Sin resultados para \"\(searchQuery)\"")
+                        .font(.headline)
+                        .foregroundStyle(UBTheme.textPrimary)
+                    Text("No se encontraron usuarios ni pistas en la base de datos de UnderBro.")
+                        .font(.caption)
+                        .foregroundStyle(UBTheme.textSecondary)
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 36)
+                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .padding(.horizontal, 16)
+            } else {
+                // Resultados agrupados según el ámbito
+                VStack(alignment: .leading, spacing: 20) {
+                    // Sección: Bro's y Artistas
+                    if (selectedSearchScope == .todos || selectedSearchScope == .creadores) && !searchResults.users.isEmpty {
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack {
+                                Text("Bro's & Artistas")
+                                    .font(.headline.weight(.bold))
+                                    .foregroundStyle(UBTheme.textPrimary)
+                                Spacer()
+                                Text("\(searchResults.users.count)")
+                                    .font(.caption.weight(.bold))
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 2)
+                                    .foregroundStyle(UBTheme.accentEnd)
+                                    .glassEffect(.regular.tint(UBTheme.accentEnd.opacity(0.2)), in: .capsule)
+                            }
+                            
+                            VStack(spacing: 10) {
+                                ForEach(searchResults.users) { user in
+                                    searchedUserCard(user)
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                    }
+                    
+                    // Sección: Canciones y Beats
+                    if (selectedSearchScope == .todos || selectedSearchScope == .canciones) && !searchResults.tracks.isEmpty {
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack {
+                                Text("Canciones & Beats")
+                                    .font(.headline.weight(.bold))
+                                    .foregroundStyle(UBTheme.textPrimary)
+                                Spacer()
+                                Text("\(searchResults.tracks.count)")
+                                    .font(.caption.weight(.bold))
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 2)
+                                    .foregroundStyle(UBTheme.accentCyan)
+                                    .glassEffect(.regular.tint(UBTheme.accentCyan.opacity(0.2)), in: .capsule)
+                            }
+                            
+                            LazyVStack(spacing: 12) {
+                                ForEach(searchResults.tracks) { track in
+                                    TrackRow(track: track, allTracks: searchResults.tracks)
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                    }
+                }
+            }
+        }
+    }
+    
+    private var searchScopeBar: some View {
+        HStack(spacing: 8) {
+            ForEach(SearchScope.allCases) { scope in
+                let isSelected = selectedSearchScope == scope
+                let count: Int = {
+                    switch scope {
+                    case .todos: return searchResults.users.count + searchResults.tracks.count
+                    case .creadores: return searchResults.users.count
+                    case .canciones: return searchResults.tracks.count
+                    }
+                }()
+                
+                if isSelected {
+                    Button {
+                        selectedSearchScope = scope
+                    } label: {
+                        Text("\(scope.rawValue) (\(count))")
+                            .font(.caption.weight(.bold))
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 6)
+                    }
+                    .buttonStyle(.glassProminent)
+                    .tint(UBTheme.accentStart)
+                } else {
+                    Button {
+                        selectedSearchScope = scope
+                    } label: {
+                        Text("\(scope.rawValue) (\(count))")
+                            .font(.caption.weight(.medium))
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 6)
+                    }
+                    .buttonStyle(.glass)
+                }
+            }
+            Spacer()
+        }
+    }
+    
+    private func searchedUserCard(_ user: UserProfile) -> some View {
+        HStack(spacing: 12) {
+            if let avatar = user.avatarURL {
+                AsyncImage(url: avatar) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image.resizable().scaledToFill()
+                    default:
+                        PlaceholderAvatarView(username: user.username, size: 44, hasNewStory: false)
+                    }
+                }
+                .frame(width: 44, height: 44)
+                .clipShape(Circle())
+            } else {
+                PlaceholderAvatarView(username: user.username, size: 44, hasNewStory: false)
+            }
+            
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 4) {
+                    Text(user.displayName.isEmpty ? user.username : user.displayName)
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(UBTheme.textPrimary)
+                    
+                    if user.isVerified {
+                        Image(systemName: "checkmark.seal.fill")
+                            .font(.caption2)
+                            .foregroundStyle(UBTheme.accentEnd)
+                    }
+                    
+                    if let badge = user.displayedBadge, !badge.isEmpty {
+                        Text(badge.uppercased())
+                            .font(.system(size: 8, weight: .black))
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .foregroundStyle(UBTheme.accentGold)
+                            .glassEffect(.regular.tint(UBTheme.accentGold.opacity(0.2)), in: .capsule)
+                    }
+                }
+                
+                HStack(spacing: 4) {
+                    Text("@\(user.username)")
+                        .font(.caption2)
+                        .foregroundStyle(UBTheme.textSecondary)
+                    
+                    if let city = user.city, !city.isEmpty {
+                        Text("· \(city)")
+                            .font(.caption2)
+                            .foregroundStyle(UBTheme.textTertiary)
+                    }
+                }
+                
+                if !user.roles.isEmpty {
+                    Text(user.roles.joined(separator: " • ").capitalized)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(UBTheme.accentCyan)
+                }
+            }
+            
+            Spacer()
+            
+            Button("Ver") {}
+                .font(.caption.weight(.bold))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .buttonStyle(.glass)
+        }
+        .padding(12)
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+    
+    private var searchSuggestionsView: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Búsqueda Global en Tiempo Real")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(UBTheme.textPrimary)
+            
+            Text("Busca directamente en la base de datos de UnderBro tanto creadores como temas musicales.")
+                .font(.caption)
+                .foregroundStyle(UBTheme.textSecondary)
+            
+            Text("Sugerencias populares:")
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(UBTheme.textTertiary)
+                .padding(.top, 4)
+            
+            let suggestions = ["kkikheroina", "akuma", "eighteen", "###sol", "MALA", "drill", "reggaeton", "ambient"]
+            
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(suggestions, id: \.self) { term in
+                        Button {
+                            searchQuery = term
+                            performDatabaseSearch(query: term, immediate: true)
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "magnifyingglass")
+                                    .font(.system(size: 10))
+                                Text(term)
+                                    .font(.caption.weight(.medium))
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 7)
+                        }
+                        .buttonStyle(.glass)
+                    }
+                }
+            }
+            .scrollDismissesKeyboard(.interactively)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
     
     // MARK: - Filtros de Descubrimiento (Discover Pills)
@@ -140,9 +450,9 @@ public struct UnderBroTrendingView: View {
                         handleDiscoverFilterChange(filter)
                     } label: {
                         Text(filter.rawValue)
-                            .font(.caption.weight(isSelected ? .bold : .medium))
+                            .font(.subheadline.weight(isSelected ? .bold : .medium))
                             .foregroundStyle(isSelected ? .white : UBTheme.textSecondary)
-                            .padding(.horizontal, 14)
+                            .padding(.horizontal, 16)
                             .padding(.vertical, 8)
                             .background {
                                 if isSelected {
@@ -188,7 +498,7 @@ public struct UnderBroTrendingView: View {
                         if track.rank == 1 || track.isFeatured {
                             FeaturedTrackCard(track: track)
                         } else {
-                            CompactTrackCard(track: track)
+                            TrackRow(track: track)
                         }
                     }
                 }
@@ -273,7 +583,7 @@ public struct UnderBroTrendingView: View {
             
             LazyVStack(spacing: 12) {
                 ForEach(tracks.filter { $0.isBeat }) { beat in
-                    CompactTrackCard(track: beat)
+                    TrackRow(track: beat)
                 }
             }
             .padding(.horizontal, 16)
@@ -318,63 +628,68 @@ public struct UnderBroTrendingView: View {
             HStack {
                 Text(date)
                     .font(.caption2.weight(.bold))
-                    .foregroundStyle(UBTheme.accentCyan)
+                    .foregroundStyle(UBTheme.accentPink)
                 Spacer()
-                Text("Entradas")
-                    .font(.caption2.weight(.bold))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .glassEffect(.regular, in: .capsule)
+                Text("Entradas disponibles")
+                    .font(.caption2)
+                    .foregroundStyle(Color.green)
             }
             
             Text(title)
                 .font(.headline.weight(.bold))
-                .foregroundStyle(.white)
+                .foregroundStyle(UBTheme.textPrimary)
             
-            Text(venue)
-                .font(.caption)
-                .foregroundStyle(UBTheme.textSecondary)
+            HStack(spacing: 4) {
+                Image(systemName: "mappin.and.ellipse")
+                    .font(.caption)
+                    .foregroundStyle(UBTheme.accentEnd)
+                Text(venue)
+                    .font(.caption)
+                    .foregroundStyle(UBTheme.textSecondary)
+            }
             
-            Text("Lineup: \(artists)")
+            Text("Artistas: \(artists)")
                 .font(.caption2)
                 .foregroundStyle(UBTheme.textTertiary)
+                .padding(.top, 2)
         }
         .padding(14)
         .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
     
-    // MARK: - Sub-sección: Bro's (Artistas y Productores)
+    // MARK: - Sub-sección: Bro's (Artistas y Creadores)
     
     private var brosSectionView: some View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Bro's de la Escena")
+                Text("Bro's & Creadores")
                     .font(.system(size: 24, weight: .bold, design: .rounded))
                     .foregroundStyle(UBTheme.textPrimary)
-                Text("Descubre productores, cantantes y creadores registrados en UnderBro.")
+                Text("Productores, cantantes y diseñadores activos en la comunidad.")
                     .font(.subheadline)
                     .foregroundStyle(UBTheme.textSecondary)
             }
             .padding(.horizontal, 16)
             
-            LazyVStack(spacing: 12) {
+            VStack(spacing: 12) {
                 ForEach(artists) { artist in
-                    HStack(spacing: 14) {
+                    HStack(spacing: 12) {
                         PlaceholderAvatarView(
                             username: artist.username,
-                            size: 52,
-                            hasNewStory: false,
+                            size: 46,
+                            hasNewStory: true,
                             isVerified: artist.isVerified
                         )
                         
-                        VStack(alignment: .leading, spacing: 3) {
+                        VStack(alignment: .leading, spacing: 2) {
                             HStack(spacing: 4) {
-                                Text(artist.displayName)
-                                    .font(.headline.weight(.bold))
-                                    .foregroundStyle(.white)
+                                Text(artist.displayName.isEmpty ? artist.username : artist.displayName)
+                                    .font(.headline.weight(.semibold))
+                                    .foregroundStyle(UBTheme.textPrimary)
+                                
                                 if artist.isVerified {
                                     Image(systemName: "checkmark.seal.fill")
-                                        .font(.caption)
+                                        .font(.caption2)
                                         .foregroundStyle(UBTheme.accentEnd)
                                 }
                             }
@@ -427,7 +742,44 @@ public struct UnderBroTrendingView: View {
         .padding(.vertical, 32)
     }
     
-    // MARK: - Carga de Datos
+    // MARK: - Carga de Datos y Búsqueda en Base de Datos
+    
+    private func performDatabaseSearch(query: String, immediate: Bool = false) {
+        let trimmed = query.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else {
+            searchResults = GlobalSearchResult()
+            isSearchingDatabase = false
+            searchDebounceTask?.cancel()
+            return
+        }
+        
+        searchDebounceTask?.cancel()
+        searchDebounceTask = Task {
+            if !immediate {
+                try? await Task.sleep(nanoseconds: 250_000_000) // 250ms debounce
+            }
+            guard !Task.isCancelled else { return }
+            
+            await MainActor.run {
+                self.isSearchingDatabase = true
+            }
+            
+            do {
+                let results = try await apiService.searchGlobal(query: trimmed)
+                guard !Task.isCancelled else { return }
+                
+                await MainActor.run {
+                    self.searchResults = results
+                    self.isSearchingDatabase = false
+                }
+            } catch {
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    self.isSearchingDatabase = false
+                }
+            }
+        }
+    }
     
     private func handleDiscoverFilterChange(_ filter: DiscoverFilter) {
         switch filter {
@@ -453,19 +805,6 @@ public struct UnderBroTrendingView: View {
             }
         case .radio, .eventos:
             break
-        }
-    }
-    
-    private func performSearch() {
-        guard !searchQuery.isEmpty else { return }
-        Task {
-            isLoading = true
-            if let results = try? await apiService.searchTracks(query: searchQuery) {
-                await MainActor.run {
-                    self.tracks = results
-                    self.isLoading = false
-                }
-            }
         }
     }
     
@@ -512,15 +851,21 @@ public struct UnderBroTrendingView: View {
         }
     }
     
+    // MARK: - Pull to Refresh
+    
     private func refreshData() async {
         do {
-            async let storiesTask = apiService.fetchStories()
-            async let feedTask = apiService.fetchFeed(segment: selectedSegment)
-            let (fetchedStories, fetchedTracks) = try await (storiesTask, feedTask)
-            self.stories = fetchedStories
-            self.tracks = fetchedTracks
+            // Esto se dispara al deslizar hacia abajo (Pull-to-refresh)
+            let updatedTracks = try await UnderBroServices.api.fetchFeed(segment: selectedSegment)
+            let updatedStories = (try? await UnderBroServices.api.fetchStories()) ?? stories
+            await MainActor.run {
+                self.tracks = updatedTracks
+                self.stories = updatedStories
+            }
         } catch {
-            self.errorMessage = error.localizedDescription
+            await MainActor.run {
+                self.errorMessage = error.localizedDescription
+            }
         }
     }
 }

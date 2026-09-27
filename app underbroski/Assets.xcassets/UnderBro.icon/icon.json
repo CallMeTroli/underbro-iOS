@@ -1,0 +1,60 @@
+{
+  "fill" : {
+    "automatic-gradient" : "extended-srgb:0.00000,0.00784,0.04314,1.00000"
+  },
+  "groups" : [
+    {
+      "layers" : [
+        {
+          "glass" : true,
+          "image-name" : "layer-b.png",
+          "name" : "B-Wing"
+        }
+      ],
+      "lighting" : "individual",
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.35
+      },
+      "position" : {
+        "scale" : 1.25,
+        "translation-in-points" : [ 0, 0 ]
+      }
+    },
+    {
+      "layers" : [
+        {
+          "glass" : false,
+          "image-name" : "layer-eyes.png",
+          "name" : "Ninja-Eyes"
+        }
+      ],
+      "lighting" : "individual",
+      "position" : {
+        "scale" : 1.25,
+        "translation-in-points" : [ 0, 0 ]
+      }
+    },
+    {
+      "layers" : [
+        {
+          "glass" : true,
+          "image-name" : "layer-u.png",
+          "name" : "U-Monogram"
+        }
+      ],
+      "lighting" : "individual",
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.65
+      },
+      "position" : {
+        "scale" : 1.25,
+        "translation-in-points" : [ 0, 0 ]
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "squares" : "shared"
+  }
+}

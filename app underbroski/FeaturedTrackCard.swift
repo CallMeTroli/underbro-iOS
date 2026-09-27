@@ -10,6 +10,7 @@ import SwiftUI
 
 public struct FeaturedTrackCard: View {
     public let track: Track
+    public var allTracks: [Track] = []
     @ObservedObject var player: AudioPlayerService = .shared
     
     @State private var isLiked: Bool
@@ -17,8 +18,9 @@ public struct FeaturedTrackCard: View {
     @State private var isReposted: Bool
     @State private var repostsCount: Int
     
-    public init(track: Track) {
+    public init(track: Track, allTracks: [Track] = []) {
         self.track = track
+        self.allTracks = allTracks
         _isLiked = State(initialValue: track.isLiked)
         _likesCount = State(initialValue: track.likesCount)
         _isReposted = State(initialValue: track.isReposted)
@@ -119,7 +121,7 @@ public struct FeaturedTrackCard: View {
                             if player.currentTrack?.id == track.id {
                                 player.seek(to: newProgress)
                             } else {
-                                player.playTrack(track)
+                                player.playTrack(track, from: allTracks.isEmpty ? [track] : allTracks)
                                 player.seek(to: newProgress)
                             }
                         }
@@ -156,7 +158,7 @@ public struct FeaturedTrackCard: View {
                     
                     // Comentarios
                     Button {
-                        player.playTrack(track)
+                        player.playTrack(track, from: allTracks.isEmpty ? [track] : allTracks)
                         player.isFullScreenPresented = true
                     } label: {
                         HStack(spacing: 4) {
@@ -228,7 +230,7 @@ public struct FeaturedTrackCard: View {
         }
         .contentShape(Rectangle())
         .onTapGesture {
-            player.playTrack(track)
+            player.playTrack(track, from: allTracks.isEmpty ? [track] : allTracks)
             player.isFullScreenPresented = true
         }
     }
@@ -255,7 +257,7 @@ public struct FeaturedTrackCard: View {
         if player.currentTrack?.id == track.id {
             player.togglePlayPause()
         } else {
-            player.playTrack(track)
+            player.playTrack(track, from: allTracks.isEmpty ? [track] : allTracks)
         }
     }
     

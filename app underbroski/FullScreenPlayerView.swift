@@ -16,6 +16,11 @@ public struct FullScreenPlayerView: View {
     @State private var likesCount: Int = 39
     @State private var commentsCount: Int = 4
     
+    // Estados del Scrubber nativo de iOS
+    @State private var isDraggingTimeline: Bool = false
+    @State private var dragTimelineProgress: Double = 0.0
+    @State private var showRemainingTime: Bool = true
+    
     public init() {}
     
     public var body: some View {
@@ -41,8 +46,8 @@ public struct FullScreenPlayerView: View {
                 // Píldoras de interacción social (Likes, Comentarios, Compartir) con GlassEffectContainer
                 socialPillsRow
                 
-                // Visualizador de Onda de Audio y Duración
-                waveformScrubberSection
+                // Línea de tiempo y barra de desplazamiento nativa de iOS
+                nativeTimelineScrubberSection
                     .padding(.horizontal, 24)
                 
                 // Botonera de control de reproducción con GlassEffectContainer nativo
@@ -177,35 +182,114 @@ public struct FullScreenPlayerView: View {
         }
     }
     
-    // MARK: - Onda de Audio y Tiempos
+    // MARK: - Línea de Tiempo Nativa (iOS Scrubber)
     
-    private var waveformScrubberSection: some View {
+    private var nativeTimelineScrubberSection: some View {
         VStack(spacing: 8) {
-            WaveformView(
-                samples: player.currentTrack?.waveformSamples?.map { CGFloat($0) },
-                progress: player.progressRatio,
-                barWidth: 3.5,
-                barSpacing: 2.2,
-                activeColor: .white,
-                inactiveColor: Color.white.opacity(0.28),
-                showScrubberHandle: true,
-                onSeek: { progress in
-                    player.seek(to: progress)
+            GeometryReader { geometry in
+                let totalWidth = geometry.size.width
+                let currentProgress = isDraggingTimeline ? dragTimelineProgress : player.progressRatio
+                let progressClamped = max(0.0, min(1.0, currentProgress))
+                let trackHeight: CGFloat = isDraggingTimeline ? 8 : 5
+                let knobSize: CGFloat = isDraggingTimeline ? 18 : 10
+                let fillWidth = max(0.0, totalWidth * CGFloat(progressClamped))
+                
+                ZStack(alignment: .leading) {
+                    // Pista de fondo inactiva
+                    Capsule()
+                        .fill(Color.white.opacity(0.18))
+                        .frame(height: trackHeight)
+                    
+                    // Pista activa completada
+                    Capsule()
+                        .fill(Color.white)
+                        .frame(width: fillWidth, height: trackHeight)
+                    
+                    // Knob / Indicador circular de arrastre con feedback visual
+                    Circle()
+                        .fill(Color.white)
+                        .frame(width: knobSize, height: knobSize)
+                        .shadow(color: Color.black.opacity(0.35), radius: isDraggingTimeline ? 6 : 2, x: 0, y: 1)
+                        .offset(x: max(0, min(totalWidth - knobSize, fillWidth - (knobSize / 2))))
                 }
-            )
-            .frame(height: 54)
+                .frame(maxHeight: .infinity)
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { gesture in
+                            if !isDraggingTimeline {
+                                isDraggingTimeline = true
+                                #if os(iOS)
+                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                #endif
+                            }
+                            let locationX = max(0.0, min(totalWidth, gesture.location.x))
+                            dragTimelineProgress = totalWidth > 0 ? Double(locationX / totalWidth) : 0.0
+                        }
+                        .onEnded { gesture in
+                            let locationX = max(0.0, min(totalWidth, gesture.location.x))
+                            let finalProgress = totalWidth > 0 ? Double(locationX / totalWidth) : 0.0
+                            player.seek(to: finalProgress)
+                            #if os(iOS)
+                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                            #endif
+                            withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
+                                isDraggingTimeline = false
+                            }
+                        }
+                )
+            }
+            .frame(height: 28)
             
+            // Etiquetas de tiempo (Transcurrido a la izq y Restante/Total a la der conmutables)
             HStack {
-                Text(player.formattedCurrentTime)
-                    .font(.caption.monospacedDigit())
+                Text(currentElapsedDisplay)
+                    .font(.system(size: 13, weight: .medium, design: .monospaced))
                     .foregroundStyle(UBTheme.textSecondary)
                 
                 Spacer()
                 
-                Text(player.currentTrack?.formattedDuration ?? "1:02")
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(UBTheme.textSecondary)
+                Button {
+                    showRemainingTime.toggle()
+                } label: {
+                    Text(currentTrailingDisplay)
+                        .font(.system(size: 13, weight: .medium, design: .monospaced))
+                        .foregroundStyle(UBTheme.textSecondary)
+                }
+                .buttonStyle(.plain)
             }
+        }
+    }
+    
+    private var currentElapsedDisplay: String {
+        if isDraggingTimeline {
+            let draggedSec = dragTimelineProgress * player.duration
+            let mins = Int(draggedSec) / 60
+            let secs = Int(draggedSec) % 60
+            return String(format: "%d:%02d", mins, secs)
+        }
+        return player.formattedCurrentTime
+    }
+    
+    private var currentTrailingDisplay: String {
+        if isDraggingTimeline {
+            let draggedSec = dragTimelineProgress * player.duration
+            if showRemainingTime {
+                let remaining = max(0, player.duration - draggedSec)
+                let mins = Int(remaining) / 60
+                let secs = Int(remaining) % 60
+                return String(format: "-%d:%02d", mins, secs)
+            } else {
+                let mins = Int(player.duration) / 60
+                let secs = Int(player.duration) % 60
+                return String(format: "%d:%02d", mins, secs)
+            }
+        }
+        
+        if showRemainingTime {
+            return player.formattedRemainingTime
+        } else {
+            return player.currentTrack?.formattedDuration ?? "1:02"
         }
     }
     

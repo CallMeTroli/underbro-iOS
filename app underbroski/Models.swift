@@ -40,7 +40,7 @@ public enum DiscoverFilter: String, CaseIterable, Identifiable {
 
 // MARK: - Perfil de Usuario (profiles en Supabase)
 
-public struct UserProfile: Identifiable, Hashable, Codable {
+public struct UserProfile: Identifiable, Hashable, Codable, Sendable {
     public let id: String
     public let username: String
     public let displayName: String
@@ -57,7 +57,7 @@ public struct UserProfile: Identifiable, Hashable, Codable {
     public var totalPlays: Int
     public let socialLinks: [SocialLink]
     
-    public struct SocialLink: Hashable, Codable, Identifiable {
+    public struct SocialLink: Hashable, Codable, Identifiable, Sendable {
         public var id: String { url }
         public let label: String
         public let url: String
@@ -135,7 +135,7 @@ public struct Story: Identifiable, Hashable, Codable {
 
 // MARK: - Pista de Audio (tracks en Supabase)
 
-public struct Track: Identifiable, Hashable, Codable {
+public struct Track: Identifiable, Hashable, Codable, Sendable {
     public let id: String
     public var rank: Int?
     public let title: String
@@ -344,6 +344,22 @@ public struct UnderBroEvent: Identifiable, Hashable, Codable {
         self.dateDisplay = dateDisplay
         self.ticketURL = ticketURL
         self.creator = creator
+    }
+}
+
+// MARK: - Resultados de Búsqueda Global en Base de Datos
+
+public struct GlobalSearchResult: Sendable, Hashable {
+    public var tracks: [Track]
+    public var users: [UserProfile]
+    
+    public init(tracks: [Track] = [], users: [UserProfile] = []) {
+        self.tracks = tracks
+        self.users = users
+    }
+    
+    public var isEmpty: Bool {
+        tracks.isEmpty && users.isEmpty
     }
 }
 

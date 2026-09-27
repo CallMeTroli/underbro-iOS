@@ -10,10 +10,12 @@ import SwiftUI
 
 public struct CompactTrackCard: View {
     public let track: Track
+    public var allTracks: [Track] = []
     @ObservedObject var player: AudioPlayerService = .shared
     
-    public init(track: Track) {
+    public init(track: Track, allTracks: [Track] = []) {
         self.track = track
+        self.allTracks = allTracks
     }
     
     private var isCurrentTrackPlaying: Bool {
@@ -95,7 +97,7 @@ public struct CompactTrackCard: View {
                 .tint(UBTheme.accentEnd)
             } else {
                 Button {
-                    player.playTrack(track)
+                    player.playTrack(track, from: allTracks.isEmpty ? [track] : allTracks)
                 } label: {
                     Image(systemName: "play.fill")
                         .font(.system(size: 14, weight: .bold))
@@ -108,8 +110,64 @@ public struct CompactTrackCard: View {
         .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .contentShape(Rectangle())
         .onTapGesture {
-            player.playTrack(track)
+            player.playTrack(track, from: allTracks.isEmpty ? [track] : allTracks)
             player.isFullScreenPresented = true
         }
     }
 }
+
+// MARK: - Componente Fila de Pista (TrackRow)
+
+/// Componente para representar una fila de pista en listas estándar o feeds
+public struct TrackRow: View {
+    public let track: Track
+    public var allTracks: [Track] = []
+    
+    public init(track: Track, allTracks: [Track] = []) {
+        self.track = track
+        self.allTracks = allTracks
+    }
+    
+    public var body: some View {
+        CompactTrackCard(track: track, allTracks: allTracks)
+    }
+}
+
+// MARK: - Vista de Lista de Pistas con Pull-to-Refresh (List)
+
+/// Vista de lista nativa con soporte completo para Pull-to-Refresh (`.refreshable`)
+public struct TrackListView: View {
+    @State private var tracks: [Track] = []
+    @State private var isLoading: Bool = false
+    
+    public init(tracks: [Track] = []) {
+        self._tracks = State(initialValue: tracks)
+    }
+    
+    public var body: some View {
+        List(tracks) { track in
+            TrackRow(track: track, allTracks: tracks)
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(UBTheme.backgroundDark.ignoresSafeArea())
+        .refreshable {
+            // Esto se dispara al deslizar hacia abajo (Pull-to-refresh)
+            do {
+                tracks = try await UnderBroServices.api.fetchFeed(segment: .tendencias)
+            } catch {
+                print("Error en pull-to-refresh: \(error)")
+            }
+        }
+        .task {
+            if tracks.isEmpty {
+                tracks = (try? await UnderBroServices.api.fetchFeed(segment: .tendencias)) ?? []
+            }
+        }
+    }
+}
+
+

@@ -29,7 +29,11 @@ public protocol UnderBroAPIServiceProtocol: Sendable {
     // Pistas y Audio
     func fetchFeed(segment: FeedSegment) async throws -> [Track]
     func fetchBeats() async throws -> [Track]
+    
+    // Búsqueda en Base de Datos (Pistas, Usuarios y Global)
     func searchTracks(query: String) async throws -> [Track]
+    func searchUsers(query: String) async throws -> [UserProfile]
+    func searchGlobal(query: String) async throws -> GlobalSearchResult
     func toggleLike(trackId: String) async throws -> Track
     func fetchComments(trackId: String) async throws -> [TrackComment]
     func postComment(trackId: String, content: String) async throws -> TrackComment
@@ -152,14 +156,15 @@ public final class UnderBroAPIClient: UnderBroAPIServiceProtocol {
         }
     }
     
-    /// Búsqueda de pistas en tiempo real
+    /// Búsqueda de pistas en tiempo real en la tabla `tracks`
     public func searchTracks(query: String) async throws -> [Track] {
-        guard !query.trimmingCharacters(in: .whitespaces).isEmpty else {
-            return try await fetchFeed(segment: .tendencias)
+        let trimmed = query.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else {
+            return []
         }
         
-        let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query
-        let path = "/rest/v1/tracks?title=ilike.*\(encoded)*&select=*,profiles:tracks_user_id_fkey(*)&limit=30"
+        let encoded = trimmed.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? trimmed
+        let path = "/rest/v1/tracks?or=(title.ilike.*\(encoded)*,artist.ilike.*\(encoded)*)&select=*,profiles:tracks_user_id_fkey(*)&order=plays.desc&limit=30"
         let request = try makeRequest(endpoint: path)
         
         let (data, response) = try await session.data(for: request)
@@ -169,6 +174,42 @@ public final class UnderBroAPIClient: UnderBroAPIServiceProtocol {
         
         let dtos = try decoder.decode([SupabaseTrackDTO].self, from: data)
         return dtos.map { $0.toDomain() }
+    }
+    
+    /// Búsqueda de usuarios y creadores en tiempo real en la tabla `profiles`
+    public func searchUsers(query: String) async throws -> [UserProfile] {
+        let trimmed = query.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else {
+            return []
+        }
+        
+        let encoded = trimmed.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? trimmed
+        let path = "/rest/v1/profiles?or=(username.ilike.*\(encoded)*,display_name.ilike.*\(encoded)*)&select=id,username,display_name,avatar_url,bio,city,roles,verified,displayed_badge,theme&limit=20"
+        let request = try makeRequest(endpoint: path)
+        
+        let (data, response) = try await session.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse, (200...299).contains(httpResponse.statusCode) else {
+            throw URLError(.badServerResponse)
+        }
+        
+        let dtos = try decoder.decode([SupabaseProfileDTO].self, from: data)
+        return dtos.map { $0.toDomain() }
+    }
+    
+    /// Búsqueda combinada global en la base de datos (concurrente)
+    public func searchGlobal(query: String) async throws -> GlobalSearchResult {
+        let trimmed = query.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else {
+            return GlobalSearchResult()
+        }
+        
+        async let tracksTask = searchTracks(query: trimmed)
+        async let usersTask = searchUsers(query: trimmed)
+        
+        let foundTracks = (try? await tracksTask) ?? []
+        let foundUsers = (try? await usersTask) ?? []
+        
+        return GlobalSearchResult(tracks: foundTracks, users: foundUsers)
     }
     
     public func toggleLike(trackId: String) async throws -> Track {
@@ -380,7 +421,25 @@ public final class MockUnderBroAPIService: UnderBroAPIServiceProtocol {
     }
     
     public func searchTracks(query: String) async throws -> [Track] {
-        return try await fetchFeed(segment: .tendencias)
+        let all = try await fetchFeed(segment: .tendencias)
+        let trimmed = query.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return [] }
+        return all.filter { $0.title.localizedCaseInsensitiveContains(trimmed) || $0.author.localizedCaseInsensitiveContains(trimmed) }
+    }
+    
+    public func searchUsers(query: String) async throws -> [UserProfile] {
+        let all = try await fetchProfiles()
+        let trimmed = query.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return [] }
+        return all.filter { $0.username.localizedCaseInsensitiveContains(trimmed) || $0.displayName.localizedCaseInsensitiveContains(trimmed) }
+    }
+    
+    public func searchGlobal(query: String) async throws -> GlobalSearchResult {
+        async let tracksTask = searchTracks(query: query)
+        async let usersTask = searchUsers(query: query)
+        let t = (try? await tracksTask) ?? []
+        let u = (try? await usersTask) ?? []
+        return GlobalSearchResult(tracks: t, users: u)
     }
     
     public func toggleLike(trackId: String) async throws -> Track {

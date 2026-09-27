@@ -96,9 +96,15 @@ public struct PhotosFeedView: View {
             .sheet(item: $activeCommentPost) { post in
                 PostCommentsSheet(post: post)
             }
+            #if os(iOS)
             .fullScreenCover(item: $selectedPostForDetail) { post in
                 PhotoLightboxView(post: post)
             }
+            #else
+            .sheet(item: $selectedPostForDetail) { post in
+                PhotoLightboxView(post: post)
+            }
+            #endif
         }
     }
     

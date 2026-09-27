@@ -194,7 +194,9 @@ public struct UploadTrackSheet: View {
                             .foregroundStyle(UBTheme.textSecondary)
                         
                         TextField("140", text: $bpmText)
+                            #if os(iOS)
                             .keyboardType(.numberPad)
+                            #endif
                             .padding(14)
                             .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                             .foregroundStyle(.white)
