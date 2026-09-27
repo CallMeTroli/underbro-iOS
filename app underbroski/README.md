@@ -199,7 +199,23 @@ El código base sigue los principios de Clean Architecture y modularidad en Swif
   * **Responsabilidad**: Muestra la pista actual en reproducción, portada, título, controles de play/pausa y anterior/siguiente, barra de progreso sutil y gesto de toque para abrir el reproductor completo.
 * **[`FullScreenPlayerView.swift`](file:///Users/troli/Desktop/app%20underbroski/app%20underbroski/FullScreenPlayerView.swift)**:
   * **Función**: Reproductor a pantalla completa en hoja modal expandible.
-  * **Responsabilidad**: Exhibe la portada en formato squircle gigante con resplandor ambiental adaptativo, onda interactiva completa con scrubbing, botones de transporte con aura neón, píldoras sociales (likes, comentarios, compartir) y selector cíclico de velocidad (`0.75x` a `2.0x`).
+  * **Responsabilidad**: Exhibe la portada en formato squircle gigante con resplandor ambiental adaptativo, onda interactiva completa con scrubbing, botones de transporte con aura neón, píldoras sociales (likes, comentarios, compartir) y selector cíclico de velocidad (`0.75x` a `2.0x`). Al pulsar sobre el nombre del artista con diseño de cristal, presenta modalmente la vista de perfil de usuario [`ArtistProfileView`](file:///Users/troli/Desktop/app%20underbroski/app%20underbroski/ArtistProfileView.swift).
+* **[`ArtistProfileView.swift`](file:///Users/troli/Desktop/app%20underbroski/app%20underbroski/ArtistProfileView.swift)**:
+  * **Función**: Interfaz de usuario completa para perfiles de artistas y creadores del ecosistema UnderBro.
+  * **Responsabilidad**: Se presenta de forma interactiva en las tres situaciones clave de la aplicación:
+    1. **Reproductor a Pantalla Completa**: Al pulsar sobre el nombre del artista en [`FullScreenPlayerView`](file:///Users/troli/Desktop/app%20underbroski/app%20underbroski/FullScreenPlayerView.swift).
+    2. **Buscador Global**: Al pulsar sobre cualquier usuario o creador en los resultados de búsqueda en vivo en la base de datos de Supabase.
+    3. **Menú Principal / Feed**: Al pulsar sobre el nombre del artista en tarjetas destacadas ([`FeaturedTrackCard`](file:///Users/troli/Desktop/app%20underbroski/app%20underbroski/FeaturedTrackCard.swift)), tarjetas compactas o listas ([`CompactTrackCard`](file:///Users/troli/Desktop/app%20underbroski/app%20underbroski/CompactTrackCard.swift) / [`TrackRow`](file:///Users/troli/Desktop/app%20underbroski/app%20underbroski/CompactTrackCard.swift)), beats instrumentales o en las tarjetas de creadores de la sección `Bro's`.
+  * **Características**:
+    - Cabecera con banner de estudio y avatar con aro de historia interactivo e insignias de verificación / `ALPHA`.
+    - Identidad del creador: `@username`, ciudad, biografía y etiquetas de rol (`Productor`, `Beatmaker`, etc.).
+    - Enlaces sociales a Spotify, Instagram, YouTube y SoundCloud con apertura nativa.
+    - Métricas de creador en cristal: Pistas publicadas, Seguidores, Siguiendo y Reproducciones totales.
+    - Botonera de acción: Botón de seguir ("Seguir" / "Siguiendo" con `.buttonStyle(.glassProminent)` / `.buttonStyle(.glass)`), botón para abrir chat privado DM y botón nativo `ShareLink` para compartir el enlace `https://underbro.app/@username`.
+    - Sub-pestañas integradas:
+      - `Pistas`: Catálogo musical del artista con reproducción en streaming directo mediante [`TrackRow`](file:///Users/troli/Desktop/app%20underbroski/app%20underbroski/CompactTrackCard.swift).
+      - `Fotos`: Galería comunitaria con miniaturas de fotos y visor Lightbox a pantalla completa.
+      - `Información`: Ficha técnica de la cuenta (fecha de ingreso, ID de Supabase y estado verificado).
 
 ---
 

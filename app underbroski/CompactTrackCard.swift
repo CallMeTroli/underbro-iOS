@@ -13,9 +13,12 @@ public struct CompactTrackCard: View {
     public var allTracks: [Track] = []
     @ObservedObject var player: AudioPlayerService = .shared
     
-    public init(track: Track, allTracks: [Track] = []) {
+    public var onAuthorTapped: (() -> Void)? = nil
+    
+    public init(track: Track, allTracks: [Track] = [], onAuthorTapped: (() -> Void)? = nil) {
         self.track = track
         self.allTracks = allTracks
+        self.onAuthorTapped = onAuthorTapped
     }
     
     private var isCurrentTrackPlaying: Bool {
@@ -64,10 +67,15 @@ public struct CompactTrackCard: View {
                     .lineLimit(1)
                 
                 // Artista(s)
-                Text("por \(track.fullAuthorDisplay)")
-                    .font(.caption)
-                    .foregroundStyle(UBTheme.textSecondary)
-                    .lineLimit(1)
+                Button {
+                    onAuthorTapped?()
+                } label: {
+                    Text("por \(track.fullAuthorDisplay)")
+                        .font(.caption)
+                        .foregroundStyle(UBTheme.textSecondary)
+                        .lineLimit(1)
+                }
+                .buttonStyle(.plain)
                 
                 // Indicador de duración y reproducciones
                 HStack(spacing: 8) {
@@ -118,18 +126,19 @@ public struct CompactTrackCard: View {
 
 // MARK: - Componente Fila de Pista (TrackRow)
 
-/// Componente para representar una fila de pista en listas estándar o feeds
 public struct TrackRow: View {
     public let track: Track
     public var allTracks: [Track] = []
+    public var onAuthorTapped: (() -> Void)? = nil
     
-    public init(track: Track, allTracks: [Track] = []) {
+    public init(track: Track, allTracks: [Track] = [], onAuthorTapped: (() -> Void)? = nil) {
         self.track = track
         self.allTracks = allTracks
+        self.onAuthorTapped = onAuthorTapped
     }
     
     public var body: some View {
-        CompactTrackCard(track: track, allTracks: allTracks)
+        CompactTrackCard(track: track, allTracks: allTracks, onAuthorTapped: onAuthorTapped)
     }
 }
 

@@ -13,14 +13,17 @@ public struct FeaturedTrackCard: View {
     public var allTracks: [Track] = []
     @ObservedObject var player: AudioPlayerService = .shared
     
+    public var onAuthorTapped: (() -> Void)? = nil
+    
     @State private var isLiked: Bool
     @State private var likesCount: Int
     @State private var isReposted: Bool
     @State private var repostsCount: Int
     
-    public init(track: Track, allTracks: [Track] = []) {
+    public init(track: Track, allTracks: [Track] = [], onAuthorTapped: (() -> Void)? = nil) {
         self.track = track
         self.allTracks = allTracks
+        self.onAuthorTapped = onAuthorTapped
         _isLiked = State(initialValue: track.isLiked)
         _likesCount = State(initialValue: track.likesCount)
         _isReposted = State(initialValue: track.isReposted)
@@ -71,25 +74,30 @@ public struct FeaturedTrackCard: View {
                         .font(.system(size: 24, weight: .bold, design: .rounded))
                         .foregroundStyle(UBTheme.textPrimary)
                     
-                    HStack(spacing: 5) {
-                        Text("por \(track.author)")
-                            .font(.subheadline.weight(.medium))
-                            .foregroundStyle(UBTheme.textPrimary.opacity(0.9))
-                        
-                        if track.isVerified {
-                            Image(systemName: "checkmark.seal.fill")
-                                .font(.caption.weight(.bold))
-                                .foregroundStyle(UBTheme.accentEnd)
-                        }
-                        
-                        if track.isAlpha {
-                            Text("α")
-                                .font(.caption2.weight(.bold))
-                                .padding(.horizontal, 5)
-                                .padding(.vertical, 2)
-                                .glassEffect(.regular.tint(UBTheme.accentStart), in: .capsule)
+                    Button {
+                        onAuthorTapped?()
+                    } label: {
+                        HStack(spacing: 5) {
+                            Text("por \(track.author)")
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(UBTheme.textPrimary.opacity(0.9))
+                            
+                            if track.isVerified {
+                                Image(systemName: "checkmark.seal.fill")
+                                    .font(.caption.weight(.bold))
+                                    .foregroundStyle(UBTheme.accentEnd)
+                            }
+                            
+                            if track.isAlpha {
+                                Text("α")
+                                    .font(.caption2.weight(.bold))
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 2)
+                                    .glassEffect(.regular.tint(UBTheme.accentStart), in: .capsule)
+                            }
                         }
                     }
+                    .buttonStyle(.plain)
                     
                     if let tagline = track.tagline {
                         Text(tagline)

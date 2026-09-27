@@ -46,6 +46,10 @@ public protocol UnderBroAPIServiceProtocol: Sendable {
     // Perfiles y Bro's
     func fetchProfiles() async throws -> [UserProfile]
     func fetchUserProfile(id: String) async throws -> UserProfile?
+    func fetchUserProfile(username: String) async throws -> UserProfile?
+    func fetchUserTracks(userId: String) async throws -> [Track]
+    func fetchUserTracks(artistName: String) async throws -> [Track]
+    func fetchUserPosts(userId: String) async throws -> [CommunityPost]
     
     // Historias
     func fetchStories() async throws -> [Story]
@@ -300,6 +304,70 @@ public final class UnderBroAPIClient: UnderBroAPIServiceProtocol {
         return dtos.first?.toDomain()
     }
     
+    public func fetchUserProfile(username: String) async throws -> UserProfile? {
+        let trimmed = username.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return nil }
+        let encoded = trimmed.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? trimmed
+        let path = "/rest/v1/profiles?or=(username.eq.\(encoded),display_name.eq.\(encoded),username.ilike.\(encoded),display_name.ilike.\(encoded))&select=id,username,display_name,avatar_url,bio,city,roles,verified,displayed_badge,theme&limit=1"
+        let request = try makeRequest(endpoint: path)
+        
+        let (data, response) = try await session.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse, (200...299).contains(httpResponse.statusCode) else {
+            return nil
+        }
+        
+        let dtos = try decoder.decode([SupabaseProfileDTO].self, from: data)
+        return dtos.first?.toDomain()
+    }
+    
+    public func fetchUserTracks(userId: String) async throws -> [Track] {
+        guard !userId.isEmpty else { return [] }
+        let path = "/rest/v1/tracks?user_id=eq.\(userId)&select=*,profiles:tracks_user_id_fkey(*)&order=created_at.desc&limit=50"
+        let request = try makeRequest(endpoint: path)
+        
+        let (data, response) = try await session.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse, (200...299).contains(httpResponse.statusCode) else {
+            return []
+        }
+        
+        let dtos = try decoder.decode([SupabaseTrackDTO].self, from: data)
+        return dtos.enumerated().map { index, dto in
+            dto.toDomain(rank: index + 1)
+        }
+    }
+    
+    public func fetchUserTracks(artistName: String) async throws -> [Track] {
+        let trimmed = artistName.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return [] }
+        let encoded = trimmed.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? trimmed
+        let path = "/rest/v1/tracks?or=(artist.ilike.*\(encoded)*,title.ilike.*\(encoded)*)&select=*,profiles:tracks_user_id_fkey(*)&order=created_at.desc&limit=50"
+        let request = try makeRequest(endpoint: path)
+        
+        let (data, response) = try await session.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse, (200...299).contains(httpResponse.statusCode) else {
+            return []
+        }
+        
+        let dtos = try decoder.decode([SupabaseTrackDTO].self, from: data)
+        return dtos.enumerated().map { index, dto in
+            dto.toDomain(rank: index + 1)
+        }
+    }
+    
+    public func fetchUserPosts(userId: String) async throws -> [CommunityPost] {
+        guard !userId.isEmpty else { return [] }
+        let path = "/rest/v1/posts?user_id=eq.\(userId)&select=*,profiles:posts_user_id_fkey(*)&order=created_at.desc&limit=30"
+        let request = try makeRequest(endpoint: path)
+        
+        let (data, response) = try await session.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse, (200...299).contains(httpResponse.statusCode) else {
+            return []
+        }
+        
+        let dtos = try decoder.decode([SupabasePostDTO].self, from: data)
+        return dtos.map { $0.toDomain() }
+    }
+    
     // MARK: - Historias
     
     public func fetchStories() async throws -> [Story] {
@@ -486,6 +554,27 @@ public final class MockUnderBroAPIService: UnderBroAPIServiceProtocol {
     
     public func fetchUserProfile(id: String) async throws -> UserProfile? {
         return UserProfile(id: id, username: "kkikheroina", displayName: "kkikheroina", isVerified: true)
+    }
+    
+    public func fetchUserProfile(username: String) async throws -> UserProfile? {
+        let profiles = try await fetchProfiles()
+        if let found = profiles.first(where: { $0.username.caseInsensitiveCompare(username) == .orderedSame || $0.displayName.caseInsensitiveCompare(username) == .orderedSame }) {
+            return found
+        }
+        return UserProfile(username: username, displayName: username, isVerified: true)
+    }
+    
+    public func fetchUserTracks(userId: String) async throws -> [Track] {
+        return try await fetchFeed(segment: .tendencias)
+    }
+    
+    public func fetchUserTracks(artistName: String) async throws -> [Track] {
+        let feed = try await fetchFeed(segment: .tendencias)
+        return feed.filter { $0.author.localizedCaseInsensitiveContains(artistName) }
+    }
+    
+    public func fetchUserPosts(userId: String) async throws -> [CommunityPost] {
+        return try await fetchCommunityPosts()
     }
     
     public func fetchStories() async throws -> [Story] {

@@ -21,6 +21,9 @@ public struct FullScreenPlayerView: View {
     @State private var dragTimelineProgress: Double = 0.0
     @State private var showRemainingTime: Bool = true
     
+    // Perfil de Artista
+    @State private var isShowingArtistProfile: Bool = false
+    
     public init() {}
     
     public var body: some View {
@@ -66,6 +69,11 @@ public struct FullScreenPlayerView: View {
                 self.isLiked = track.isLiked
                 self.likesCount = track.likesCount
                 self.commentsCount = track.commentsCount
+            }
+        }
+        .sheet(isPresented: $isShowingArtistProfile) {
+            if let track = player.currentTrack {
+                ArtistProfileView(artistName: track.author)
             }
         }
     }
@@ -124,16 +132,32 @@ public struct FullScreenPlayerView: View {
             Text(player.currentTrack?.title ?? "###sol")
                 .font(.system(size: 26, weight: .heavy, design: .rounded))
                 .foregroundStyle(UBTheme.textPrimary)
+                .multilineTextAlignment(.center)
             
-            Text(player.currentTrack?.fullAuthorDisplay ?? "kkikheroina")
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [UBTheme.accentEnd, UBTheme.accentCyan],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
+            // Botón interactivo para ver el perfil del artista
+            Button {
+                isShowingArtistProfile = true
+            } label: {
+                HStack(spacing: 5) {
+                    Text(player.currentTrack?.fullAuthorDisplay ?? "kkikheroina")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [UBTheme.accentEnd, UBTheme.accentCyan],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                    
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(UBTheme.accentCyan.opacity(0.8))
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .glassEffect(.regular.interactive(), in: .capsule)
+            }
+            .buttonStyle(.plain)
         }
     }
     

@@ -21,8 +21,23 @@ public struct UnderBroTrendingView: View {
         public var id: String { rawValue }
     }
     
+    public enum ProfileDestination: Identifiable {
+        case user(UserProfile)
+        case artistName(String)
+        
+        public var id: String {
+            switch self {
+            case .user(let user): return "user-\(user.id)"
+            case .artistName(let name): return "artist-\(name)"
+            }
+        }
+    }
+    
     @State private var selectedSegment: FeedSegment = .tendencias
     @State private var selectedDiscoverFilter: DiscoverFilter = .todos
+    
+    // Destino para ver Perfil de Usuario / Artista
+    @State private var profileDestination: ProfileDestination? = nil
     
     // Estado de Búsqueda Global en Base de Datos
     @State private var searchQuery: String = ""
@@ -66,7 +81,13 @@ public struct UnderBroTrendingView: View {
                             }
                         },
                         onNotificationsTapped: {},
-                        onProfileTapped: {}
+                        onProfileTapped: {
+                            if let firstArtist = artists.first {
+                                profileDestination = .user(firstArtist)
+                            } else if let firstTrack = tracks.first {
+                                profileDestination = .artistName(firstTrack.author)
+                            }
+                        }
                     )
                     
                     // Barra de búsqueda expandible
@@ -125,6 +146,14 @@ public struct UnderBroTrendingView: View {
             }
             .task {
                 loadInitialData()
+            }
+            .sheet(item: $profileDestination) { destination in
+                switch destination {
+                case .user(let user):
+                    ArtistProfileView(user: user)
+                case .artistName(let artistName):
+                    ArtistProfileView(artistName: artistName)
+                }
             }
         }
     }
@@ -271,7 +300,13 @@ public struct UnderBroTrendingView: View {
                             
                             LazyVStack(spacing: 12) {
                                 ForEach(searchResults.tracks) { track in
-                                    TrackRow(track: track, allTracks: searchResults.tracks)
+                                    TrackRow(
+                                        track: track,
+                                        allTracks: searchResults.tracks,
+                                        onAuthorTapped: {
+                                            profileDestination = .artistName(track.author)
+                                        }
+                                    )
                                 }
                             }
                         }
@@ -381,14 +416,20 @@ public struct UnderBroTrendingView: View {
             
             Spacer()
             
-            Button("Ver") {}
-                .font(.caption.weight(.bold))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .buttonStyle(.glass)
+            Button("Ver") {
+                profileDestination = .user(user)
+            }
+            .font(.caption.weight(.bold))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .buttonStyle(.glass)
         }
         .padding(12)
         .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .contentShape(Rectangle())
+        .onTapGesture {
+            profileDestination = .user(user)
+        }
     }
     
     private var searchSuggestionsView: some View {
@@ -496,9 +537,21 @@ public struct UnderBroTrendingView: View {
                 LazyVStack(spacing: 16) {
                     ForEach(tracks) { track in
                         if track.rank == 1 || track.isFeatured {
-                            FeaturedTrackCard(track: track)
+                            FeaturedTrackCard(
+                                track: track,
+                                allTracks: tracks,
+                                onAuthorTapped: {
+                                    profileDestination = .artistName(track.author)
+                                }
+                            )
                         } else {
-                            TrackRow(track: track)
+                            TrackRow(
+                                track: track,
+                                allTracks: tracks,
+                                onAuthorTapped: {
+                                    profileDestination = .artistName(track.author)
+                                }
+                            )
                         }
                     }
                 }
@@ -583,7 +636,13 @@ public struct UnderBroTrendingView: View {
             
             LazyVStack(spacing: 12) {
                 ForEach(tracks.filter { $0.isBeat }) { beat in
-                    TrackRow(track: beat)
+                    TrackRow(
+                        track: beat,
+                        allTracks: tracks,
+                        onAuthorTapped: {
+                            profileDestination = .artistName(beat.author)
+                        }
+                    )
                 }
             }
             .padding(.horizontal, 16)
@@ -719,6 +778,10 @@ public struct UnderBroTrendingView: View {
                     }
                     .padding(12)
                     .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        profileDestination = .user(artist)
+                    }
                 }
             }
             .padding(.horizontal, 16)
