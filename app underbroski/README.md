@@ -132,7 +132,10 @@ El código base sigue los principios de Clean Architecture y modularidad en Swif
   * **Responsabilidad**: Implementa `UnderBroAPIServiceProtocol` con `UnderBroAPIClient` mediante `URLSession` y Swift Concurrency (`async/await`). Ejecuta el RPC `trending_tracks`, consultas REST sobre las tablas `tracks`, `posts`, `profiles`, `comments`, inyecta encabezados de navegación autorizada (`Origin`, `Referer`, `apikey`, `Bearer`), decodifica los DTOs al dominio y proporciona el respaldo offline `MockUnderBroAPIService`.
 * **[`Models.swift`](file:///Users/troli/Desktop/app%20underbroski/app%20underbroski/Models.swift)**:
   * **Función**: Definición de todas las entidades de dominio y DTOs de datos del ecosistema UnderBro.
-  * **Responsabilidad**: Declara estructuras `Codable`, `Identifiable` y `Hashable`: `Track` (pistas y beats con BPM/Key), `UserProfile` (perfiles de artistas, roles, enlaces y verificaciones), `Story` (historias efímeras), `CommunityPost` (publicaciones visuales de la comunidad), `TrackComment` (comentarios en pistas), `ChatMessage` (mensajes de chat público y DMs), `UnderBroEvent` (eventos y conciertos), `MainTab`, `FeedSegment` y `DiscoverFilter`.
+  * **Responsabilidad**: Declara estructuras `Codable`, `Identifiable` y `Hashable`: `Track` (pistas y beats con BPM/Key), `UserProfile` (perfiles de artistas, roles, enlaces y verificaciones), `Story` (historias efímeras), `CommunityPost` (publicaciones visuales de la comunidad), `TrackComment` (comentarios en pistas), `ChatMessage` (mensajes de chat público y DMs), `UnderBroEvent` (eventos y conciertos), DTOs de autenticación (`SupabaseAuthResponseDTO`, `SupabaseAuthUserDTO`, `SupabaseAuthErrorDTO`), `MainTab`, `FeedSegment` y `DiscoverFilter`.
+* **[`AuthenticationManager.swift`](file:///Users/troli/Desktop/app%20underbroski/app%20underbroski/AuthenticationManager.swift)**:
+  * **Función**: Gestor central de sesiones y autenticación conectado en directo a Supabase Auth (`/auth/v1`).
+  * **Responsabilidad**: Gestiona el ciclo de vida del usuario (`isAuthenticated`, `currentUser`, `authToken`, `isGuest`), ejecuta inicio de sesión con correo y contraseña (`/token?grant_type=password`), registro de nuevos creadores (`/signup`), recuperación de contraseñas (`/recover`), cierre de sesión (`signOut`) y persistencia local segura de tokens y perfiles en `UserDefaults`.
 
 ---
 
@@ -216,6 +219,17 @@ El código base sigue los principios de Clean Architecture y modularidad en Swif
       - `Pistas`: Catálogo musical del artista con reproducción en streaming directo mediante [`TrackRow`](file:///Users/troli/Desktop/app%20underbroski/app%20underbroski/CompactTrackCard.swift).
       - `Fotos`: Galería comunitaria con miniaturas de fotos y visor Lightbox a pantalla completa.
       - `Información`: Ficha técnica de la cuenta (fecha de ingreso, ID de Supabase y estado verificado).
+* **[`UnderBroLoginView.swift`](file:///Users/troli/Desktop/app%20underbroski/app%20underbroski/UnderBroLoginView.swift)**:
+  * **Función**: Pantalla de inicio de sesión, registro y recuperación de cuenta adaptada de `underbro.app`.
+  * **Responsabilidad**: Permite a los usuarios acceder a su cuenta de UnderBro en la nube o registrarse como nuevos creadores:
+    - Selector deslizante limpio para alternar entre **"Iniciar sesión"** y **"Registrarse"**.
+    - Acceso rápido oficial con **Google OAuth** mediante `ASWebAuthenticationSession` con captura automática del callback scheme `underbro://auth/callback` para retornar directamente a la app tras seleccionar la cuenta.
+    - Botones con diseño limpio, estilizado y sólido sin fondos de cristal esmerilado que estorben, y con márgenes laterales generosos que evitan que queden pegados a los bordes de la pantalla.
+    - Separador visual y formulario de correo y contraseña con visualizador interactivo de contraseña (mostrar/ocultar).
+    - Modo Registro con campos de `@alias`, nombre artístico, correo, medidor de fuerza de contraseña reactivo (Débil, Media, Segura), selector de fecha de nacimiento con advertencia comunitaria de edad (+14 años), selector de roles underground (Cantante, Productor, Beatmaker, DJ, Diseñador, Oyente) y aceptación de términos legales.
+    - Modal de recuperación de contraseña conectada al endpoint `/auth/v1/recover` de Supabase.
+    - Botón para **"Explorar como invitado"** sin necesidad de registro inmediato.
+    - Banner de errores y confirmaciones con respuesta háptica y animaciones fluidas.
 
 ---
 

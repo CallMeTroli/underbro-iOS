@@ -12,6 +12,7 @@ public struct UnderBroRootView: View {
     @State private var selectedTab: MainTab = .stream
     @State private var isUploadPresented: Bool = false
     @ObservedObject var player: AudioPlayerService = .shared
+    @ObservedObject var auth: AuthenticationManager = .shared
     
     public init() {}
     
@@ -57,6 +58,18 @@ public struct UnderBroRootView: View {
         // Hoja modal para subir pistas
         .sheet(isPresented: $isUploadPresented) {
             UploadTrackSheet()
+        }
+        // Hoja modal para iniciar sesión o registrarse en UnderBro
+        .sheet(isPresented: $auth.isLoginSheetPresented) {
+            UnderBroLoginView()
+        }
+        // Captura de redirecciones OAuth de Supabase (ej: underbro://auth/callback)
+        .onOpenURL { url in
+            if url.scheme == "underbro" {
+                Task {
+                    try? await auth.handleAuthCallback(url: url)
+                }
+            }
         }
     }
 }

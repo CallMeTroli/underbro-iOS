@@ -82,10 +82,10 @@ public struct UnderBroTrendingView: View {
                         },
                         onNotificationsTapped: {},
                         onProfileTapped: {
-                            if let firstArtist = artists.first {
-                                profileDestination = .user(firstArtist)
-                            } else if let firstTrack = tracks.first {
-                                profileDestination = .artistName(firstTrack.author)
+                            if AuthenticationManager.shared.isAuthenticated, let user = AuthenticationManager.shared.currentUser {
+                                profileDestination = .user(user)
+                            } else {
+                                AuthenticationManager.shared.isLoginSheetPresented = true
                             }
                         }
                     )

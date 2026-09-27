@@ -546,3 +546,57 @@ public struct SupabaseCommentDTO: Codable {
         )
     }
 }
+
+// MARK: - Modelos de Autenticación Supabase Auth
+
+public struct SupabaseAuthResponseDTO: Codable, Sendable {
+    public let access_token: String
+    public let token_type: String
+    public let expires_in: Int?
+    public let refresh_token: String?
+    public let user: SupabaseAuthUserDTO
+}
+
+public struct SupabaseAuthUserDTO: Codable, Sendable {
+    public let id: String
+    public let email: String?
+    public let user_metadata: [String: String]?
+    
+    public var username: String? {
+        user_metadata?["username"]
+    }
+    
+    public var displayName: String? {
+        user_metadata?["display_name"] ?? user_metadata?["username"]
+    }
+}
+
+public struct SupabaseAuthErrorDTO: Codable, Sendable {
+    public let code: Int?
+    public let error_code: String?
+    public let msg: String?
+    public let message: String?
+    public let error_description: String?
+    
+    public var localizedDescriptionMessage: String {
+        if let ec = error_code {
+            switch ec {
+            case "invalid_credentials":
+                return "Credenciales incorrectas. Comprueba tu correo y contraseña."
+            case "weak_password":
+                return "La contraseña debe tener al menos 6 caracteres y ser más segura."
+            case "email_not_confirmed":
+                return "Por favor confirma tu correo electrónico antes de iniciar sesión."
+            case "user_already_exists":
+                return "Ya existe una cuenta registrada con este correo electrónico."
+            case "over_request_rate_limit", "over_email_send_rate_limit":
+                return "Has realizado demasiados intentos. Por favor espera unos minutos."
+            case "validation_failed":
+                return "El formato de los datos introducidos no es válido."
+            default:
+                break
+            }
+        }
+        return msg ?? message ?? error_description ?? "Error al conectar con el servicio de autenticación."
+    }
+}

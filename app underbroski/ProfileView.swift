@@ -43,6 +43,7 @@ public struct ProfileView: View {
     
     @State private var selectedSubTab: ProfileSubTab = .pistas
     @State private var isEditingProfile: Bool = false
+    @ObservedObject private var auth: AuthenticationManager = .shared
     
     // Pistas del usuario
     @State private var userTracks: [Track] = [
@@ -82,6 +83,13 @@ public struct ProfileView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 20) {
+                    // Banner de cuenta para usuarios no autenticados
+                    if !auth.isAuthenticated {
+                        unauthenticatedBanner
+                            .padding(.horizontal, 16)
+                            .padding(.top, 4)
+                    }
+                    
                     // 1. Banner superior y Foto de Perfil
                     profileHeaderView
                     
@@ -120,6 +128,46 @@ public struct ProfileView: View {
     
     // MARK: - 1. Cabecera con Banner y Avatar
     
+    // MARK: - Banner de Usuario No Autenticado
+    
+    private var unauthenticatedBanner: some View {
+        VStack(spacing: 12) {
+            HStack(spacing: 14) {
+                Image(systemName: "person.crop.circle.badge.plus")
+                    .font(.system(size: 32))
+                    .foregroundStyle(UBTheme.brandGradient)
+                
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Inicia sesión en UnderBro")
+                        .font(.headline.weight(.bold))
+                        .foregroundStyle(.white)
+                    Text("Conecta tu cuenta para sincronizar tus pistas, likes y chats con la web underbro.app.")
+                        .font(.caption)
+                        .foregroundStyle(UBTheme.textSecondary)
+                }
+                Spacer()
+            }
+            
+            Button {
+                auth.isLoginSheetPresented = true
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.right.circle.fill")
+                    Text("Iniciar sesión / Registrarse")
+                }
+                .font(.subheadline.weight(.bold))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
+            }
+            .buttonStyle(.glassProminent)
+            .tint(UBTheme.accentEnd)
+        }
+        .padding(16)
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+    
+    // MARK: - 1. Cabecera con Banner y Avatar
+    
     private var profileHeaderView: some View {
         VStack(spacing: 0) {
             // Banner de estudio con Liquid Glass
@@ -142,11 +190,11 @@ public struct ProfileView: View {
             VStack(spacing: 8) {
                 ZStack(alignment: .bottomTrailing) {
                     PlaceholderAvatarView(
-                        username: "Tu historia",
+                        username: auth.currentUser?.username ?? "Tu historia",
                         size: 92,
                         hasNewStory: true,
                         isMe: true,
-                        isVerified: true
+                        isVerified: auth.currentUser?.isVerified ?? true
                     )
                     .offset(y: -46)
                     .padding(.bottom, -46)
@@ -155,15 +203,17 @@ public struct ProfileView: View {
                 // Nombre, badge y usuario
                 VStack(spacing: 4) {
                     HStack(spacing: 6) {
-                        Text("Troli Under")
+                        Text(auth.currentUser?.displayName ?? "Troli Under")
                             .font(.system(size: 22, weight: .bold, design: .rounded))
                             .foregroundStyle(UBTheme.textPrimary)
                         
-                        Image(systemName: "checkmark.seal.fill")
-                            .font(.subheadline)
-                            .foregroundStyle(UBTheme.accentEnd)
+                        if auth.currentUser?.isVerified ?? true {
+                            Image(systemName: "checkmark.seal.fill")
+                                .font(.subheadline)
+                                .foregroundStyle(UBTheme.accentEnd)
+                        }
                         
-                        Text("ALPHA")
+                        Text(auth.currentUser?.displayedBadge ?? (auth.isAuthenticated ? "CREADOR" : "ALPHA"))
                             .font(.system(size: 9, weight: .black))
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
@@ -171,11 +221,11 @@ public struct ProfileView: View {
                             .glassEffect(.regular.tint(UBTheme.accentGold.opacity(0.2)), in: .capsule)
                     }
                     
-                    Text("@troli · Madrid, ES")
+                    Text("@\(auth.currentUser?.username ?? "troli")\(auth.currentUser?.city != nil ? " · \(auth.currentUser!.city!)" : " · Madrid, ES")")
                         .font(.subheadline)
                         .foregroundStyle(UBTheme.textSecondary)
                     
-                    Text("Productor & Beatmaker underground. Experimentando con síntesis analógica, pluggnb y ambient wave.")
+                    Text(auth.currentUser?.bio ?? "Productor & Beatmaker underground. Experimentando con síntesis analógica, pluggnb y ambient wave.")
                         .font(.footnote)
                         .foregroundStyle(UBTheme.textSecondary)
                         .multilineTextAlignment(.center)
@@ -489,6 +539,57 @@ public struct ProfileView: View {
     
     private var ajustesTabContent: some View {
         VStack(spacing: 14) {
+            // Cuenta y Sesión Activa
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Cuenta & Sesión")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(UBTheme.textSecondary)
+                
+                if auth.isAuthenticated, let user = auth.currentUser {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(user.displayName)
+                                .font(.subheadline.weight(.bold))
+                                .foregroundStyle(UBTheme.textPrimary)
+                            Text("@\(user.username)")
+                                .font(.caption)
+                                .foregroundStyle(UBTheme.textSecondary)
+                        }
+                        
+                        Spacer()
+                        
+                        Button("Cerrar Sesión") {
+                            auth.signOut()
+                        }
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(UBTheme.accentPink)
+                        .buttonStyle(.glass)
+                    }
+                } else {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Modo Invitado")
+                                .font(.subheadline.weight(.bold))
+                                .foregroundStyle(UBTheme.textPrimary)
+                            Text("Inicia sesión para sincronizar pistas y favoritos")
+                                .font(.caption)
+                                .foregroundStyle(UBTheme.textSecondary)
+                        }
+                        
+                        Spacer()
+                        
+                        Button("Iniciar Sesión") {
+                            auth.isLoginSheetPresented = true
+                        }
+                        .font(.caption.weight(.bold))
+                        .buttonStyle(.glassProminent)
+                        .tint(UBTheme.accentEnd)
+                    }
+                }
+            }
+            .padding(14)
+            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            
             // Estado de Conexión a Servidor
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
