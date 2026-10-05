@@ -14,12 +14,14 @@ La aplicación recrea fielmente la totalidad de apartados descubiertos en el an�
   * `Tendencias`: Consume el RPC nativo de Supabase `POST /rest/v1/rpc/trending_tracks`.
   * `Nuevo`: Pistas ordenadas cronológicamente (`order=created_at.desc`).
   * `Siguiendo`: Pistas de artistas a los que sigue el usuario.
-* **Píldoras de Descubrimiento (Discover Pills)**:
-  * `🔥 Todo`: Vista general de canciones y feed completo.
-  * `📻 Radio`: Transmisión continua comunitaria 24/7 con botón de sintonización instantánea.
-  * `🎹 Beats`: Instrumentales filtradas por `is_beat = true` con BPM y Tonalidad musical (Key).
-  * `🎟️ Eventos`: Agenda de showcases, raves y conciertos de la escena underground.
-  * `🎤 Bro's`: Directorio de creadores destacados para descubrir talento nuevo.
+* **Píldoras de Descubrimiento (Discover Pills) con Navegación por Gesto Táctil (Swipe)**:
+  * Permite alternar entre los menús deslizando horizontalmente la pantalla a derecha o izquierda con transiciones fluidas de resorte (`spring`) y retroalimentación háptica:
+    * `🔥 Todo`: Vista general de canciones y feed completo.
+    * `📻 Radio`: Transmisión continua comunitaria 24/7 con botón de sintonización instantánea.
+    * `🎹 Beats`: Instrumentales filtradas por `is_beat = true` con BPM y Tonalidad musical (Key).
+    * `🎟️ Eventos`: Agenda de showcases, raves y conciertos de la escena underground.
+    * `🎤 Bro's`: Directorio de creadores destacados para descubrir talento nuevo.
+  * La barra superior se auto-desplaza suavemente (`ScrollViewReader`) para centrar y mantener visible la píldora activa al deslizar.
 * **Riel de Historias (Stories)**: Carrusel horizontal con perfiles de la comunidad y estados visto/no-visto.
 * **Tarjetas de Audio**: Tarjetas destacadas (`FeaturedTrackCard`) y compactas (`CompactTrackCard`) con reproducción de audio real (`AVPlayer`), visualizador de formas de onda (`WaveformView`) y contadores de plays, likes y comentarios.
 

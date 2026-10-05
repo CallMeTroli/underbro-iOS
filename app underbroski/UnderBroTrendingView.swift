@@ -36,6 +36,20 @@ public struct UnderBroTrendingView: View {
     @State private var selectedSegment: FeedSegment = .tendencias
     @State private var selectedDiscoverFilter: DiscoverFilter = .todos
     
+    // Dirección del desplazamiento para la transición fluida de menús
+    private enum SlideDirection {
+        case forward
+        case backward
+    }
+    @State private var slideDirection: SlideDirection = .forward
+    
+    private var filterTransition: AnyTransition {
+        .asymmetric(
+            insertion: .move(edge: slideDirection == .forward ? .trailing : .leading).combined(with: .opacity),
+            removal: .move(edge: slideDirection == .forward ? .leading : .trailing).combined(with: .opacity)
+        )
+    }
+    
     // Destino para ver Perfil de Usuario / Artista
     @State private var profileDestination: ProfileDestination? = nil
     
@@ -118,19 +132,8 @@ public struct UnderBroTrendingView: View {
                             )
                         }
                         
-                        // Contenido según el filtro activo
-                        switch selectedDiscoverFilter {
-                        case .todos:
-                            standardFeedView
-                        case .radio:
-                            radioStreamSection
-                        case .beats:
-                            beatsSectionView
-                        case .eventos:
-                            eventsSectionView
-                        case .bros:
-                            brosSectionView
-                        }
+                        // Contenido según el filtro activo con soporte de deslizamiento lateral (swipe)
+                        filterContentView
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -479,36 +482,80 @@ public struct UnderBroTrendingView: View {
     // MARK: - Filtros de Descubrimiento (Discover Pills)
     
     private var discoverPillsView: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(DiscoverFilter.allCases) { filter in
-                    let isSelected = selectedDiscoverFilter == filter
-                    
-                    Button {
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                            selectedDiscoverFilter = filter
-                        }
-                        handleDiscoverFilterChange(filter)
-                    } label: {
-                        Text(filter.rawValue)
-                            .font(.subheadline.weight(isSelected ? .bold : .medium))
-                            .foregroundStyle(isSelected ? .white : UBTheme.textSecondary)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 8)
-                            .background {
-                                if isSelected {
-                                    Capsule()
-                                        .glassEffect(.regular.tint(UBTheme.accentEnd).interactive(), in: .capsule)
-                                } else {
-                                    Capsule()
-                                        .glassEffect(.regular.interactive(), in: .capsule)
-                                }
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(DiscoverFilter.allCases) { filter in
+                        let isSelected = selectedDiscoverFilter == filter
+                        
+                        Button {
+                            let all = DiscoverFilter.allCases
+                            if let currIdx = all.firstIndex(of: selectedDiscoverFilter),
+                               let newIdx = all.firstIndex(of: filter) {
+                                slideDirection = newIdx >= currIdx ? .forward : .backward
                             }
+                            let impact = UIImpactFeedbackGenerator(style: .light)
+                            impact.impactOccurred()
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                selectedDiscoverFilter = filter
+                            }
+                            handleDiscoverFilterChange(filter)
+                        } label: {
+                            Text(filter.rawValue)
+                                .font(.subheadline.weight(isSelected ? .bold : .medium))
+                                .foregroundStyle(isSelected ? .white : UBTheme.textSecondary)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 8)
+                                .background {
+                                    if isSelected {
+                                        Capsule()
+                                            .glassEffect(.regular.tint(UBTheme.accentEnd).interactive(), in: .capsule)
+                                    } else {
+                                        Capsule()
+                                            .glassEffect(.regular.interactive(), in: .capsule)
+                                    }
+                                }
+                        }
+                        .buttonStyle(.plain)
+                        .id(filter)
                     }
-                    .buttonStyle(.plain)
+                }
+            }
+            .onChange(of: selectedDiscoverFilter) { _, newFilter in
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    proxy.scrollTo(newFilter, anchor: .center)
                 }
             }
         }
+    }
+    
+    // MARK: - Contenedor con Deslizamiento Táctil (Swipe Gestures)
+    
+    private var filterContentView: some View {
+        Group {
+            switch selectedDiscoverFilter {
+            case .todos:
+                standardFeedView
+            case .radio:
+                radioStreamSection
+            case .beats:
+                beatsSectionView
+            case .eventos:
+                eventsSectionView
+            case .bros:
+                brosSectionView
+            }
+        }
+        .id(selectedDiscoverFilter)
+        .transition(filterTransition)
+        .frame(maxWidth: .infinity, minHeight: 450, alignment: .topLeading)
+        .contentShape(Rectangle())
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 20, coordinateSpace: .local)
+                .onEnded { value in
+                    handleHorizontalSwipe(value)
+                }
+        )
     }
     
     // MARK: - Feed Estándar de Pistas
@@ -869,6 +916,55 @@ public struct UnderBroTrendingView: View {
         case .radio, .eventos:
             break
         }
+    }
+    
+    // MARK: - Navegación y Gestos entre Menús de Descubrimiento (Swipe)
+    
+    private func handleHorizontalSwipe(_ value: DragGesture.Value) {
+        let horizontalAmount = value.translation.width
+        let verticalAmount = value.translation.height
+        
+        // Comprobar que el gesto sea predominantemente horizontal para preservar el scroll vertical
+        guard abs(horizontalAmount) > abs(verticalAmount) * 1.25 else { return }
+        
+        let threshold: CGFloat = 35
+        let predictedThreshold: CGFloat = 80
+        
+        if horizontalAmount < -threshold || value.predictedEndTranslation.width < -predictedThreshold {
+            // Deslizar hacia la izquierda (dedo de derecha a izquierda) -> siguiente menú
+            selectNextDiscoverFilter()
+        } else if horizontalAmount > threshold || value.predictedEndTranslation.width > predictedThreshold {
+            // Deslizar hacia la derecha (dedo de izquierda a derecha) -> menú anterior
+            selectPreviousDiscoverFilter()
+        }
+    }
+    
+    private func selectNextDiscoverFilter() {
+        let all = DiscoverFilter.allCases
+        guard let currentIndex = all.firstIndex(of: selectedDiscoverFilter),
+              currentIndex < all.count - 1 else { return }
+        let nextFilter = all[currentIndex + 1]
+        slideDirection = .forward
+        let impact = UIImpactFeedbackGenerator(style: .light)
+        impact.impactOccurred()
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+            selectedDiscoverFilter = nextFilter
+        }
+        handleDiscoverFilterChange(nextFilter)
+    }
+    
+    private func selectPreviousDiscoverFilter() {
+        let all = DiscoverFilter.allCases
+        guard let currentIndex = all.firstIndex(of: selectedDiscoverFilter),
+              currentIndex > 0 else { return }
+        let prevFilter = all[currentIndex - 1]
+        slideDirection = .backward
+        let impact = UIImpactFeedbackGenerator(style: .light)
+        impact.impactOccurred()
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+            selectedDiscoverFilter = prevFilter
+        }
+        handleDiscoverFilterChange(prevFilter)
     }
     
     private func loadInitialData() {
